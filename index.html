@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HR ↔ LMS Reconciler</title>
+<meta name="description" content="Reconciles an HR export against an LMS export entirely in your browser — finds missing accounts, leavers with access, duplicates, permission mismatches and training-rule gaps, and writes an investigation report." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --navy:#182D3F; --head:#1F374C; --ink:#22303c; --muted:#5b6b78;
+    --line:#e3e8ec; --bg:#f4f6f8; --card:#fff;
+    --hi:#c0392b; --hi-bg:#fdecea; --med:#b9770e; --med-bg:#fdf3e2;
+    --low:#2b6cb0; --low-bg:#e9f2fb; --ok:#1e7e5a; --ok-bg:#e6f4ee;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:"Instrument Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--ink); background:var(--bg); line-height:1.45; font-size:15px}
+  a{color:var(--low)}
+  .wrap{max-width:1140px; margin:0 auto; padding:0 16px 72px}
+
+  header.top{background:var(--navy); color:#fff; padding:26px 0 22px; border-bottom:3px solid #10202c}
+  header.top .wrap{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px}
+  header.top h1{margin:0; font-size:22px; font-weight:700}
+  header.top p{margin:5px 0 0; color:#c3d0da; font-size:13.5px; max-width:680px}
+  .byline{color:#93a6b2; font-size:12px; margin-top:3px}
+  .privacy{font-size:11.5px; color:#0f1c26; background:#9fd6bd; padding:4px 10px; border-radius:999px; font-weight:600}
+
+  .step{background:var(--card); border:1px solid var(--line); border-radius:12px; margin:18px 0; overflow:hidden}
+  .step > h2{margin:0; padding:14px 18px; font-size:15px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:10px}
+  .step > h2 .num{width:22px; height:22px; border-radius:50%; background:var(--head); color:#fff;
+    font-size:12.5px; display:grid; place-items:center; font-weight:700}
+  .step .body{padding:16px 18px}
+  .muted{color:var(--muted)} .sub{color:var(--muted); font-size:12.5px}
+
+  .btn{font-family:inherit; font-size:14px; font-weight:600; border-radius:9px; padding:9px 15px;
+    border:1px solid var(--head); background:var(--head); color:#fff; cursor:pointer; transition:.12s}
+  .btn:hover{background:#16293a}
+  .btn.ghost{background:#fff; color:var(--head)} .btn.ghost:hover{background:#eef3f6}
+  .btn.small{padding:6px 11px; font-size:13px}
+  .btn.big{padding:11px 20px; font-size:15px}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+  input[type=file]{display:none}
+
+  .sources{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  .src{border:1.5px dashed var(--line); border-radius:10px; padding:14px; text-align:center}
+  .src.loaded{border-style:solid; border-color:#9fd6bd; background:#f2faf6}
+  .src h3{margin:0 0 3px; font-size:13.5px}
+  .src .st{font-size:12px; color:var(--muted); margin:6px 0 10px; min-height:16px}
+  .src.loaded .st{color:var(--ok); font-weight:600}
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px}
+  .test{font-size:12px; padding:4px 10px; border-radius:999px; background:#eef3f6; color:var(--muted)}
+  .test.pass{background:var(--ok-bg); color:var(--ok); font-weight:600}
+
+  .maps{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  .map h3{margin:0 0 8px; font-size:13px; color:var(--head)}
+  .map .row{display:grid; grid-template-columns:1fr 1fr; gap:6px; align-items:center; margin:4px 0}
+  .map label{font-size:12.5px; color:var(--ink)}
+  .map select{width:100%; font-family:inherit; font-size:12.5px; padding:5px 6px; border:1px solid var(--line); border-radius:6px; background:#fff}
+
+  .rule{display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; align-items:end}
+  .rule .f label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px}
+  .rule .f input, .rule .f select{width:100%; font-family:inherit; font-size:13.5px; padding:8px; border:1px solid var(--line); border-radius:7px; background:#fff}
+  .rule .chk{display:flex; align-items:center; gap:7px; font-size:13px}
+
+  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:2px 0 16px}
+  .kpi{background:#fafbfc; border:1px solid var(--line); border-radius:10px; padding:12px 14px}
+  .kpi .n{font-size:24px; font-weight:700; color:var(--navy)} .kpi.alert .n{color:var(--hi)}
+  .kpi .l{font-size:12px; color:var(--muted); margin-top:2px}
+  .rulebar{background:var(--low-bg); border:1px solid #cfe1f2; border-radius:9px; padding:10px 14px; font-size:13.5px; margin-bottom:16px}
+  .rulebar b{color:var(--head)}
+
+  .group{margin-bottom:16px}
+  .group h3{margin:0 0 6px; font-size:14px; display:flex; align-items:center; gap:8px}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; background:#fff; table-layout:fixed}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere}
+  th{font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:600}
+  tr:last-child td{border-bottom:none}
+  th:nth-child(1),td:nth-child(1){width:22%}
+  th:nth-child(2),td:nth-child(2){width:33%}
+  th:nth-child(3),td:nth-child(3){width:33%}
+  th:nth-child(4),td:nth-child(4){width:12%}
+  .sev{font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; white-space:nowrap}
+  .sev.high{color:var(--hi); background:var(--hi-bg)}
+  .sev.medium{color:var(--med); background:var(--med-bg)}
+  .sev.low{color:var(--low); background:var(--low-bg)}
+  .fix{color:var(--head)} td.pick{text-align:center}
+  .empty{padding:30px; text-align:center; color:var(--muted)}
+
+  .report{margin-top:8px}
+  .report pre{white-space:pre-wrap; font-family:"Instrument Sans",sans-serif; font-size:12.5px;
+    background:#0f1c26; color:#e7edf1; padding:16px; border-radius:10px; line-height:1.5; max-height:460px; overflow:auto}
+  .rhead{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px}
+
+  .limits{font-size:13px; color:var(--muted)}
+  .limits b{color:var(--head)} .limits ul{margin:6px 0 0; padding-left:18px} .limits li{margin:3px 0}
+  .hidden{display:none}
+  @media (max-width:860px){ .sources,.maps{grid-template-columns:1fr} .kpis{grid-template-columns:repeat(2,1fr)} .rule{grid-template-columns:1fr 1fr} .hide-sm{display:none} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div>
+      <h1>HR &harr; LMS Reconciler</h1>
+      <p>Upload an HR export and an LMS export, map the columns once, and get a reviewed list of
+         accounts and assignments that need attention &mdash; then a report you can file.</p>
+      <div class="byline">Concept demo &middot; Sarah Yuzi Sandstr&ouml;m</div>
+    </div>
+    <span class="privacy">Runs entirely in your browser &middot; no data uploaded</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- STEP 1 -->
+  <section class="step">
+    <h2><span class="num">1</span> Data sources</h2>
+    <div class="body">
+      <div class="sources">
+        <div class="src" id="src-employees">
+          <h3>HR export</h3><div class="st">no file</div>
+          <button class="btn ghost small" data-load="employees">Choose CSV</button>
+        </div>
+        <div class="src" id="src-lms_users">
+          <h3>LMS users export</h3><div class="st">no file</div>
+          <button class="btn ghost small" data-load="lms_users">Choose CSV</button>
+        </div>
+        <div class="src" id="src-assignments">
+          <h3>Learning assignments <span class="sub">(optional)</span></h3><div class="st">no file</div>
+          <button class="btn ghost small" data-load="assignments">Choose CSV</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn small" id="demoBtn">Load demo data</button>
+        <button class="btn ghost small" id="clearBtn">Clear</button>
+        <span class="spacer" style="flex:1"></span>
+        <span class="test" id="testBadge">engine self-test: —</span>
+      </div>
+      <input type="file" id="fileInput" accept=".csv,.tsv,.txt" />
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="step hidden" id="mapStep">
+    <h2><span class="num">2</span> Map columns <span class="sub" style="font-weight:400">— auto-filled from headers; adjust if needed</span></h2>
+    <div class="body"><div class="maps" id="maps"></div></div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="step hidden" id="ruleStep">
+    <h2><span class="num">3</span> Training rule <span class="sub" style="font-weight:400">— one control to check a required course across a population</span></h2>
+    <div class="body">
+      <div class="rule">
+        <div class="f"><label>Population field</label>
+          <select id="ruleField"></select></div>
+        <div class="f"><label>equals</label>
+          <input id="ruleValue" value="Finland" /></div>
+        <div class="f"><label>Required course code</label>
+          <input id="ruleCourse" value="SEC101" /></div>
+        <div class="f chk"><input type="checkbox" id="ruleComplete" /><label for="ruleComplete">require completion (not just assignment)</label></div>
+      </div>
+      <div class="sub" style="margin-top:8px">Rules always apply to <b>active</b> employees; the field above narrows the population further.</div>
+    </div>
+  </section>
+
+  <div style="text-align:center; margin:6px 0 18px">
+    <button class="btn big" id="runBtn" disabled>Run reconciliation</button>
+  </div>
+
+  <!-- RESULTS -->
+  <section class="step hidden" id="resultStep">
+    <h2><span class="num">✓</span> Findings</h2>
+    <div class="body">
+      <div class="kpis" id="kpis"></div>
+      <div class="rulebar hidden" id="rulebar"></div>
+      <div id="groups"></div>
+    </div>
+  </section>
+
+  <!-- REPORT -->
+  <section class="step hidden" id="reportStep">
+    <h2><span class="num">↳</span> Investigation report</h2>
+    <div class="body report">
+      <div class="rhead">
+        <div class="sub">Checked rows only. Edit before filing into Confluence / a ticket.</div>
+        <div>
+          <button class="btn ghost small" id="copyBtn">Copy</button>
+          <button class="btn ghost small" id="dlMdBtn">Download .md</button>
+          <button class="btn ghost small" id="dlCsvBtn">Export issues .csv</button>
+        </div>
+      </div>
+      <pre id="reportText"></pre>
+    </div>
+  </section>
+
+  <section class="step">
+    <h2><span class="num">i</span> Scope &amp; limits</h2>
+    <div class="body limits">
+      This tool reconciles data and surfaces exceptions for a human to act on. By design it does
+      <b>not</b>:
+      <ul>
+        <li>decide your policy &mdash; you configure the training rule; it then checks it accurately;</li>
+        <li>grant or revoke access &mdash; it flags a mismatch and an administrator investigates;</li>
+        <li>send anything anywhere &mdash; files are parsed locally and never leave the browser.</li>
+      </ul>
+      Bundled demo data is synthetic. Replace it with correctly structured real exports and the same
+      checks run against them. Next steps: saved mappings, multiple rules, and a live API connector
+      feeding the same engine.
+    </div>
+  </section>
+</div>
+
+<script src="engine.js"></script>
+<script src="demo-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
