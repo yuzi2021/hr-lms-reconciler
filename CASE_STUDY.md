@@ -70,20 +70,6 @@ the rule), it doesn't grant or revoke access (it flags; a human acts), and it re
 rather than live systems. A production version would read Docebo's REST API and the Peakon/HRIS feed
 on a schedule and post exceptions straight into Jira — the same checks, without the manual export.
 
-## Talking points (for a conversation)
-
-- "Docebo's enrolment rules only enrol people when they're *added* to a group — existing staff
-  aren't back-filled, so a new mandatory course leaves silent gaps. My tool reconciles who's actually
-  covered."
-- "Deprovisioning falls back to manual outside Okta/Entra, so I built a check for leavers who still
-  hold active LMS accounts."
-- "The manager field can't be auto-provisioned in Docebo, so hierarchy drifts from HR — that's a
-  reconciliation problem, not a config one."
-- "Peakon anchors on email or employee number and needs a clean active population — same matching
-  logic my tool uses."
-- "I kept it entirely client-side on purpose: reconciliation touches employee data, so nothing should
-  leave the browser."
-
 ## Sources
 - Docebo SCIM provisioning capabilities and limitations — Stitchflow
 - Docebo enrolment rules (Docebo Help & Support)
