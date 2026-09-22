@@ -1,5 +1,7 @@
 # HR ↔ LMS Reconciler
 
+**Live demo → https://yuzi2021.github.io/hr-lms-reconciler/**
+
 A small, browser-only tool that reconciles an **HR export** against an **LMS export** and surfaces
 the exceptions an HR-technology administrator otherwise finds by hand with monthly VLOOKUPs. It
 reads your CSVs, lets you map the columns once, runs a set of checks, and writes an investigation
